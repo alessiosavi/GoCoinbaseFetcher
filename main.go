@@ -56,7 +56,7 @@ func dumpAllData(historyBTCTrades []datastructure.Trade, historyETHTrades []data
 
 func dumpData(historyTrades []datastructure.Trade, filename string) {
 	sort.Slice(historyTrades, func(i, j int) bool {
-		return historyTrades[i].Time.Before(historyTrades[j].Time)
+		return historyTrades[i].TradeID < historyTrades[j].TradeID
 	})
 	indent := helper.MarshalIndent(historyTrades)
 	_ = ioutil.WriteFile(filename, []byte(indent), 0755)
