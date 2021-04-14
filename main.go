@@ -12,6 +12,7 @@ import (
 	"net/http/httputil"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"sort"
 	"time"
 )
@@ -47,10 +48,16 @@ func dumpAllData(historyBTCTrades []datastructure.Trade, historyETHTrades []data
 	log.Println(message + " INTERCEPTED!")
 	historyBTCTrades = append(loadData("data/btc-eur.json"), historyBTCTrades...)
 	dumpData(historyBTCTrades, "data/btc-eur.json")
+	historyBTCTrades = nil
+	debug.FreeOSMemory()
 	historyETHTrades = append(loadData("data/eth-eur.json"), historyETHTrades...)
 	dumpData(historyETHTrades, "data/eth-eur.json")
+	historyETHTrades = nil
+	debug.FreeOSMemory()
 	historyLTCTrades = append(loadData("data/ltc-eur.json"), historyLTCTrades...)
 	dumpData(historyLTCTrades, "data/ltc-eur.json")
+	historyLTCTrades = nil
+	debug.FreeOSMemory()
 	return 0
 }
 
