@@ -1,11 +1,14 @@
 package main
 
 import (
+	"github.com/pquerna/ffjson/ffjson"
+	"path"
+)
+import (
 	"GoCoinbaseFetcher/datastructure"
-	"encoding/json"
+	//"encoding/json"
 	"fmt"
 	fileutils "github.com/alessiosavi/GoGPUtils/files"
-	"github.com/alessiosavi/GoGPUtils/helper"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -14,16 +17,25 @@ import (
 	"os/signal"
 	"runtime/debug"
 	"sort"
+	"strings"
 	"time"
 )
 
 const API = `https://api.pro.coinbase.com/products/%s/trades`
 
+const BTC_FILE = `data/btc-eur_%s.json`
+const ETH_FILE = `data/eth-eur_%s.json`
+const LTC_FILE = `data/ltc-eur_%s.json`
+
 func main() {
 
-	var historyBTCTrades []datastructure.Trade
-	var historyETHTrades []datastructure.Trade
-	var historyLTCTrades []datastructure.Trade
+	var historyBTCTrades strings.Builder
+	var historyETHTrades strings.Builder
+	var historyLTCTrades strings.Builder
+
+	historyBTCTrades.WriteString("[")
+	historyETHTrades.WriteString("[")
+	historyLTCTrades.WriteString("[")
 
 	defer dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, "PANIC")
 	c := make(chan os.Signal, 1)
@@ -35,55 +47,87 @@ func main() {
 
 	var i int
 	for {
-		historyBTCTrades = append(historyBTCTrades, getHistory("BTC-EUR")...)
-		historyETHTrades = append(historyETHTrades, getHistory("ETH-EUR")...)
-		historyLTCTrades = append(historyLTCTrades, getHistory("LTC-EUR")...)
+		historyBTCTrades.WriteString(getHistoryString("BTC-EUR"))
+		historyETHTrades.WriteString(getHistoryString("ETH-EUR"))
+		historyLTCTrades.WriteString(getHistoryString("LTC-EUR"))
 		log.Println(i)
 		time.Sleep(2500 * time.Millisecond)
 		i++
 	}
 }
 
-func dumpAllData(historyBTCTrades []datastructure.Trade, historyETHTrades []datastructure.Trade, historyLTCTrades []datastructure.Trade, message string) int {
-	log.Println(message + " INTERCEPTED!")
-	historyBTCTrades = append(loadData("data/btc-eur.json"), historyBTCTrades...)
-	dumpData(historyBTCTrades, "data/btc-eur.json")
-	historyBTCTrades = nil
-	debug.FreeOSMemory()
-	historyETHTrades = append(loadData("data/eth-eur.json"), historyETHTrades...)
-	dumpData(historyETHTrades, "data/eth-eur.json")
-	historyETHTrades = nil
-	debug.FreeOSMemory()
-	historyLTCTrades = append(loadData("data/ltc-eur.json"), historyLTCTrades...)
-	dumpData(historyLTCTrades, "data/ltc-eur.json")
-	historyLTCTrades = nil
-	debug.FreeOSMemory()
-	return 0
-}
+func MergeData(target, finalName string) {
+	files := fileutils.FindFiles("data", target, true)
+	var data []datastructure.Trade
+	for _, f := range files {
+		if !strings.HasSuffix(f, ".json") {
+			continue
+		}
+		log.Println("Managing file: " + f)
+		var tempData []datastructure.Trade
 
-func dumpData(historyTrades []datastructure.Trade, filename string) {
-	sort.Slice(historyTrades, func(i, j int) bool {
-		return historyTrades[i].TradeID < historyTrades[j].TradeID
-	})
-	indent := helper.MarshalIndent(historyTrades)
-	_ = ioutil.WriteFile(filename, []byte(indent), 0755)
-}
-
-func loadData(file string) []datastructure.Trade {
-	var historyTrades []datastructure.Trade
-	if fileutils.FileExists(file) {
-		data, err := ioutil.ReadFile(file)
+		file, err := ioutil.ReadFile(f)
 		if err != nil {
 			panic(err)
 		}
-		if err = json.Unmarshal(data, &historyTrades); err != nil {
+
+		if err = ffjson.Unmarshal(file, &tempData); err != nil {
+			panic(err)
+		}
+		data = append(data, tempData...)
+	}
+
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].TradeID < data[j].TradeID
+	})
+
+	buf, err := ffjson.Marshal(data)
+	if err != nil {
+		panic(err)
+	}
+
+	fName := path.Join("data/", finalName)
+	if err = ioutil.WriteFile(fName, buf, 0755); err != nil {
+		panic(err)
+	}
+
+	for _, f := range files {
+		if !strings.HasSuffix(f, ".json") || strings.Contains(f, finalName) {
+			continue
+		}
+		if err := os.Remove(f); err != nil {
 			panic(err)
 		}
 	}
-	return historyTrades
+	ffjson.Pool(buf)
 }
 
-func getHistory(pair string) []datastructure.Trade {
+func dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades strings.Builder, message string) int {
+	log.Println(message + " INTERCEPTED!")
+	timeNow := time.Now().Format("2006.01.02_15.04.05")
+
+	// Dumping BTC
+	dumpData(historyBTCTrades.String(), fmt.Sprintf(BTC_FILE, timeNow))
+	debug.FreeOSMemory()
+	historyBTCTrades.Reset()
+
+	// DUMPING ETH
+	dumpData(historyETHTrades.String(), fmt.Sprintf(ETH_FILE, timeNow))
+	debug.FreeOSMemory()
+	historyETHTrades.Reset()
+
+	// DUMPING LTC
+	dumpData(historyLTCTrades.String(), fmt.Sprintf(LTC_FILE, timeNow))
+	debug.FreeOSMemory()
+	historyLTCTrades.Reset()
+	return 0
+}
+
+func dumpData(historyTrades, filename string) {
+	_ = ioutil.WriteFile(filename, []byte(historyTrades[:len(historyTrades)-1]+"]"), 0755)
+}
+
+func getHistoryString(pair string) string {
 	resp, err := http.Get(fmt.Sprintf(API, pair))
 	if err != nil {
 		panic(err)
@@ -93,15 +137,13 @@ func getHistory(pair string) []datastructure.Trade {
 		if err != nil {
 			panic(err)
 		}
-		panic("TOO MUCH REQUEST:\n" + string(response))
+		log.Println("TOO MUCH REQUEST:\n" + string(response))
+		time.Sleep(5 * time.Second)
 	}
 	rawData, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		panic(err)
 	}
-	var trades []datastructure.Trade
-	if err = json.Unmarshal(rawData, &trades); err != nil {
-		panic(err)
-	}
-	return trades
+	rawData = rawData[1 : len(rawData)-1]
+	return string(rawData) + ","
 }
