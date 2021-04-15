@@ -1,6 +1,7 @@
 package main
 
 import (
+	"GoCoinbaseFetcher/utils"
 	"github.com/pquerna/ffjson/ffjson"
 	"path"
 )
@@ -14,7 +15,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"os"
-	"os/signal"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -31,46 +31,51 @@ const BTC_FILE_USD = `data/btc-usd_%s.json`
 const ETH_FILE_USD = `data/eth-usd_%s.json`
 const LTC_FILE_USD = `data/ltc-usd_%s.json`
 
+//func main() {
+//
+//	var historyBTCTrades strings.Builder
+//	var historyETHTrades strings.Builder
+//	var historyLTCTrades strings.Builder
+//
+//	var historyBTCTradesUSD strings.Builder
+//	var historyETHTradesUSD strings.Builder
+//	var historyLTCTradesUSD strings.Builder
+//
+//	historyBTCTrades.WriteString("[")
+//	historyETHTrades.WriteString("[")
+//	historyLTCTrades.WriteString("[")
+//	historyBTCTradesUSD.WriteString("[")
+//	historyETHTradesUSD.WriteString("[")
+//	historyLTCTradesUSD.WriteString("[")
+//
+//	defer dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyLTCTradesUSD, "PANIC")
+//	c := make(chan os.Signal, 1)
+//	signal.Notify(c, os.Interrupt)
+//	go func() {
+//		<-c
+//		os.Exit(dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyLTCTradesUSD, "CTRL+C"))
+//	}()
+//
+//	var i int
+//	for {
+//		historyBTCTrades.WriteString(getHistoryString("BTC-EUR"))
+//		historyETHTrades.WriteString(getHistoryString("ETH-EUR"))
+//		historyLTCTrades.WriteString(getHistoryString("LTC-EUR"))
+//		time.Sleep(2500 * time.Millisecond)
+//
+//		historyBTCTradesUSD.WriteString(getHistoryString("BTC-USD"))
+//		historyETHTradesUSD.WriteString(getHistoryString("ETH-USD"))
+//		historyLTCTradesUSD.WriteString(getHistoryString("LTC-USD"))
+//		time.Sleep(2500 * time.Millisecond)
+//
+//		log.Println(i)
+//		i++
+//	}
+//}
+
 func main() {
-
-	var historyBTCTrades strings.Builder
-	var historyETHTrades strings.Builder
-	var historyLTCTrades strings.Builder
-
-	var historyBTCTradesUSD strings.Builder
-	var historyETHTradesUSD strings.Builder
-	var historyLTCTradesUSD strings.Builder
-
-	historyBTCTrades.WriteString("[")
-	historyETHTrades.WriteString("[")
-	historyLTCTrades.WriteString("[")
-	historyBTCTradesUSD.WriteString("[")
-	historyETHTradesUSD.WriteString("[")
-	historyLTCTradesUSD.WriteString("[")
-
-	defer dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyLTCTradesUSD, "PANIC")
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		os.Exit(dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyLTCTradesUSD, "CTRL+C"))
-	}()
-
-	var i int
-	for {
-		historyBTCTrades.WriteString(getHistoryString("BTC-EUR"))
-		historyETHTrades.WriteString(getHistoryString("ETH-EUR"))
-		historyLTCTrades.WriteString(getHistoryString("LTC-EUR"))
-		time.Sleep(2500 * time.Millisecond)
-
-		historyBTCTradesUSD.WriteString(getHistoryString("BTC-USD"))
-		historyETHTradesUSD.WriteString(getHistoryString("ETH-USD"))
-		historyLTCTradesUSD.WriteString(getHistoryString("LTC-USD"))
-		time.Sleep(2500 * time.Millisecond)
-
-		log.Println(i)
-		i++
-	}
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Llongfile)
+	utils.FetchAllData(API, BTC_FILE_EUR)
 }
 
 func MergeData(target, finalName string) {
@@ -170,6 +175,7 @@ func getHistoryString(pair string) string {
 		log.Println("TOO MUCH REQUEST:\n" + string(response))
 		time.Sleep(5 * time.Second)
 	}
+	resp.Header.Get("after")
 	rawData, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		panic(err)
