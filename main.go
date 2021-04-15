@@ -23,9 +23,13 @@ import (
 
 const API = `https://api.pro.coinbase.com/products/%s/trades`
 
-const BTC_FILE = `data/btc-eur_%s.json`
-const ETH_FILE = `data/eth-eur_%s.json`
-const LTC_FILE = `data/ltc-eur_%s.json`
+const BTC_FILE_EUR = `data/btc-eur_%s.json`
+const ETH_FILE_EUR = `data/eth-eur_%s.json`
+const LTC_FILE_EUR = `data/ltc-eur_%s.json`
+
+const BTC_FILE_USD = `data/btc-usd_%s.json`
+const ETH_FILE_USD = `data/eth-usd_%s.json`
+const LTC_FILE_USD = `data/ltc-usd_%s.json`
 
 func main() {
 
@@ -33,16 +37,23 @@ func main() {
 	var historyETHTrades strings.Builder
 	var historyLTCTrades strings.Builder
 
+	var historyBTCTradesUSD strings.Builder
+	var historyETHTradesUSD strings.Builder
+	var historyLTCTradesUSD strings.Builder
+
 	historyBTCTrades.WriteString("[")
 	historyETHTrades.WriteString("[")
 	historyLTCTrades.WriteString("[")
+	historyBTCTradesUSD.WriteString("[")
+	historyETHTradesUSD.WriteString("[")
+	historyLTCTradesUSD.WriteString("[")
 
-	defer dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, "PANIC")
+	defer dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyLTCTradesUSD, "PANIC")
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		os.Exit(dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, "CTRL+C"))
+		os.Exit(dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyLTCTradesUSD, "CTRL+C"))
 	}()
 
 	var i int
@@ -50,8 +61,14 @@ func main() {
 		historyBTCTrades.WriteString(getHistoryString("BTC-EUR"))
 		historyETHTrades.WriteString(getHistoryString("ETH-EUR"))
 		historyLTCTrades.WriteString(getHistoryString("LTC-EUR"))
-		log.Println(i)
 		time.Sleep(2500 * time.Millisecond)
+
+		historyBTCTradesUSD.WriteString(getHistoryString("BTC-USD"))
+		historyETHTradesUSD.WriteString(getHistoryString("ETH-USD"))
+		historyLTCTradesUSD.WriteString(getHistoryString("LTC-USD"))
+		time.Sleep(2500 * time.Millisecond)
+
+		log.Println(i)
 		i++
 	}
 }
@@ -102,24 +119,37 @@ func MergeData(target, finalName string) {
 	ffjson.Pool(buf)
 }
 
-func dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades strings.Builder, message string) int {
+func dumpAllData(historyBTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyETHTrades, historyLTCTrades, historyLTCTradesUSD strings.Builder, message string) int {
 	log.Println(message + " INTERCEPTED!")
 	timeNow := time.Now().Format("2006.01.02_15.04.05")
 
 	// Dumping BTC
-	dumpData(historyBTCTrades.String(), fmt.Sprintf(BTC_FILE, timeNow))
-	debug.FreeOSMemory()
+	dumpData(historyBTCTrades.String(), fmt.Sprintf(BTC_FILE_EUR, timeNow))
 	historyBTCTrades.Reset()
+	debug.FreeOSMemory()
+
+	dumpData(historyBTCTradesUSD.String(), fmt.Sprintf(BTC_FILE_USD, timeNow))
+	historyBTCTradesUSD.Reset()
+	debug.FreeOSMemory()
 
 	// DUMPING ETH
-	dumpData(historyETHTrades.String(), fmt.Sprintf(ETH_FILE, timeNow))
-	debug.FreeOSMemory()
+	dumpData(historyETHTrades.String(), fmt.Sprintf(ETH_FILE_EUR, timeNow))
 	historyETHTrades.Reset()
+	debug.FreeOSMemory()
+
+	dumpData(historyETHTradesUSD.String(), fmt.Sprintf(ETH_FILE_USD, timeNow))
+	historyETHTradesUSD.Reset()
+	debug.FreeOSMemory()
 
 	// DUMPING LTC
-	dumpData(historyLTCTrades.String(), fmt.Sprintf(LTC_FILE, timeNow))
-	debug.FreeOSMemory()
+	dumpData(historyLTCTrades.String(), fmt.Sprintf(LTC_FILE_EUR, timeNow))
 	historyLTCTrades.Reset()
+	debug.FreeOSMemory()
+
+	dumpData(historyLTCTradesUSD.String(), fmt.Sprintf(LTC_FILE_USD, timeNow))
+	historyLTCTradesUSD.Reset()
+	debug.FreeOSMemory()
+
 	return 0
 }
 
