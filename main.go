@@ -75,7 +75,7 @@ const LTC_FILE_USD = `data/ltc-usd_%s.json`
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Llongfile)
-	utils.FetchAllData(API, BTC_FILE_EUR)
+	utils.FetchAllData(API, BTC_FILE_EUR, fmt.Sprintf("%d", utils.GetPagination("btc-eur")))
 }
 
 func MergeData(target, finalName string) {
