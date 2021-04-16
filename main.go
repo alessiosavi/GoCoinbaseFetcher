@@ -2,12 +2,12 @@ package main
 
 import (
 	"GoCoinbaseFetcher/utils"
-	"github.com/pquerna/ffjson/ffjson"
+	"encoding/json"
+	"flag"
 	"path"
 )
 import (
 	"GoCoinbaseFetcher/datastructure"
-	//"encoding/json"
 	"fmt"
 	fileutils "github.com/alessiosavi/GoGPUtils/files"
 	"io/ioutil"
@@ -75,6 +75,12 @@ const LTC_FILE_USD = `data/ltc-usd_%s.json`
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Llongfile)
+	b := flag.Bool("merge", false, "merge data")
+	flag.Parse()
+	if *b {
+		MergeData("btc-eur", "btc-eur.json")
+		return
+	}
 	utils.FetchAllData(API, BTC_FILE_EUR, fmt.Sprintf("%d", utils.GetPagination("btc-eur")))
 }
 
@@ -93,7 +99,7 @@ func MergeData(target, finalName string) {
 			panic(err)
 		}
 
-		if err = ffjson.Unmarshal(file, &tempData); err != nil {
+		if err = json.Unmarshal(file, &tempData); err != nil {
 			panic(err)
 		}
 		data = append(data, tempData...)
@@ -103,7 +109,7 @@ func MergeData(target, finalName string) {
 		return data[i].TradeID < data[j].TradeID
 	})
 
-	buf, err := ffjson.Marshal(data)
+	buf, err := json.Marshal(data)
 	if err != nil {
 		panic(err)
 	}
@@ -121,7 +127,6 @@ func MergeData(target, finalName string) {
 			panic(err)
 		}
 	}
-	ffjson.Pool(buf)
 }
 
 func dumpAllData(historyBTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyETHTrades, historyLTCTrades, historyLTCTradesUSD strings.Builder, message string) int {

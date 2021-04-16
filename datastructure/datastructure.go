@@ -1,11 +1,14 @@
 package datastructure
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Trade struct {
 	Time    time.Time `json:"time"`
 	TradeID int       `json:"trade_id"`
-	Price   string    `json:"price"`
-	Size    string    `json:"size"`
+	Price   json.Number   `json:"price"`
+	Size    json.Number   `json:"size"`
 	Side    string    `json:"side"`
 }
