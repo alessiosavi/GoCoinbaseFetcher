@@ -24,6 +24,13 @@ type TradePagination struct {
 	After  string `json:"after"`
 }
 
+var client = http.Client{
+	Transport:     http.DefaultTransport,
+	CheckRedirect: nil,
+	Jar:           nil,
+	Timeout:       0,
+}
+
 func FetchAllData(API, BTC_FILE_EUR, tradeID string) {
 	var pagination TradePagination
 	pagination.Name = fmt.Sprintf(API, "btc-eur")
@@ -116,16 +123,18 @@ func dumpAllData(f *os.File) int {
 	return 0
 }
 
-func dumpData(historyTrades, filename string) {
-	_ = ioutil.WriteFile(filename, []byte(historyTrades[:len(historyTrades)-1]+"]"), 0755)
-}
 func fetch(conf *TradePagination) []byte {
 	url := conf.Name + fmt.Sprintf("?after=%s", conf.After)
-	resp, err := http.Get(url)
+	//resp, err := http.Get(url)
+	resp, err := client.Get(url)
 	if err != nil {
-		panic(err)
+		log.Println("ERROR:", err)
+		return nil
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 429 {
+		_, _ = io.Copy(ioutil.Discard, resp.Body)
 		response, err := httputil.DumpResponse(resp, true)
 		if err != nil {
 			panic(err)
