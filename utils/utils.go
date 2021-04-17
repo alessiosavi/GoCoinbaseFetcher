@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	fileutils "github.com/alessiosavi/GoGPUtils/files"
 	"io"
@@ -125,7 +126,6 @@ func dumpAllData(f *os.File) int {
 
 func fetch(conf *TradePagination) []byte {
 	url := conf.Name + fmt.Sprintf("?after=%s", conf.After)
-	//resp, err := http.Get(url)
 	resp, err := client.Get(url)
 	if err != nil {
 		log.Println("ERROR:", err)
@@ -146,7 +146,11 @@ func fetch(conf *TradePagination) []byte {
 	if err != nil {
 		panic(err)
 	}
-	rawData = rawData[1 : len(rawData)-1]
-	conf.After = resp.Header.Get("CB-AFTER")
-	return append(rawData, []byte{','}...)
+
+	if bytes.Contains(rawData, []byte("error")) {
+		rawData = rawData[1 : len(rawData)-1]
+		conf.After = resp.Header.Get("CB-AFTER")
+		return append(rawData, []byte{','}...)
+	}
+	return nil
 }
