@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bufio"
 	"fmt"
 	fileutils "github.com/alessiosavi/GoGPUtils/files"
 	"io"
@@ -11,7 +12,6 @@ import (
 	"net/http/httputil"
 	"os"
 	"os/signal"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,33 +25,49 @@ type TradePagination struct {
 }
 
 func FetchAllData(API, BTC_FILE_EUR, tradeID string) {
-	var sb strings.Builder
 	var pagination TradePagination
 	pagination.Name = fmt.Sprintf(API, "btc-eur")
 	pagination.After = tradeID
 
 	log.Println("Using the following pagination: " + tradeID)
-	sb.WriteString("[")
 
-	defer dumpAllData(sb, BTC_FILE_EUR, "PANIC")
+	timeNow := time.Now().Format("2006.01.02_15.04.05")
+	f, err := os.Create(fmt.Sprintf(BTC_FILE_EUR, timeNow))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	w := bufio.NewWriter(f)
+	w.WriteString("[")
+
+	defer dumpAllData(f)
+	defer f.Close()
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		os.Exit(dumpAllData(sb, BTC_FILE_EUR, "CTRL+C"))
+		dumpAllData(f)
+		f.Close()
+		os.Exit(0)
 	}()
 
 	for {
-		sb.WriteString(fetch(&pagination))
+		if _, err = w.Write(fetch(&pagination)); err != nil {
+			panic(err)
+		}
+		if err = w.Flush(); err != nil {
+			panic(err)
+		}
+
 		log.Println("After: ", pagination.After)
 		time.Sleep(500 * time.Millisecond)
 	}
 }
 
 func GetPagination(coin string) int {
-	t, err := fileutils.ListFile("C:\\opt\\SP\\workspace\\Golang\\GoCoinbaseFetcher\\data")
+	t, err := fileutils.ListFile("data")
 	if err != nil {
-		panic(err)
+		return math.MaxInt32
 	}
 
 	var files []string
@@ -62,15 +78,16 @@ func GetPagination(coin string) int {
 	}
 
 	sort.Strings(files)
-	var tradeId int
+	var tradeId int = math.MaxInt32
 	for _, f := range files {
-		if strings.Contains(f, coin) {
+		if strings.Contains(f, coin) && strings.HasSuffix(f, ".json") {
 			open, err := os.Open(f)
 			if err != nil {
 				panic(err)
 			}
-			if _, err = open.Seek(-120, io.SeekEnd); err != nil {
-				panic(err)
+
+			if _, err = open.Seek(-101, io.SeekEnd); err != nil {
+				return math.MaxInt32
 			}
 
 			b := make([]byte, 120)
@@ -81,30 +98,30 @@ func GetPagination(coin string) int {
 			log.Println(row)
 			startIndex := strings.Index(row, `"trade_id":`) + len(`"trade_id":`)
 			stopIndex := strings.Index(row[startIndex:], ",") + startIndex
-			tradeId, err = strconv.Atoi(row[startIndex:stopIndex])
+			tradeIdTemp, err := strconv.Atoi(row[startIndex:stopIndex])
 			if err != nil {
 				return math.MaxInt32
+			}
+			if tradeIdTemp > tradeId {
+				tradeId = tradeIdTemp
 			}
 		}
 	}
 	return tradeId
 }
 
-func dumpAllData(data strings.Builder, BTC_FILE_EUR, message string) int {
-	log.Println(message + " INTERCEPTED!")
-	timeNow := time.Now().Format("2006.01.02_15.04.05")
-
-	// Dumping BTC
-	dumpData(data.String(), fmt.Sprintf(BTC_FILE_EUR, timeNow))
-	data.Reset()
-	debug.FreeOSMemory()
+func dumpAllData(f *os.File) int {
+	if _, err := f.Seek(-1, io.SeekEnd); err != nil {
+		panic(err)
+	}
+	f.WriteString("]")
 	return 0
 }
 
 func dumpData(historyTrades, filename string) {
 	_ = ioutil.WriteFile(filename, []byte(historyTrades[:len(historyTrades)-1]+"]"), 0755)
 }
-func fetch(conf *TradePagination) string {
+func fetch(conf *TradePagination) []byte {
 	url := conf.Name + fmt.Sprintf("?after=%s", conf.After)
 	resp, err := http.Get(url)
 	if err != nil {
@@ -124,5 +141,5 @@ func fetch(conf *TradePagination) string {
 	}
 	rawData = rawData[1 : len(rawData)-1]
 	conf.After = resp.Header.Get("CB-AFTER")
-	return string(rawData) + ","
+	return append(rawData, []byte{','}...)
 }
