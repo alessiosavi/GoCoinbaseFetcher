@@ -76,7 +76,6 @@ func GetPagination(coin string) int {
 			files = append(files, f)
 		}
 	}
-
 	sort.Strings(files)
 	var tradeId int = math.MaxInt32
 	for _, f := range files {
@@ -85,11 +84,10 @@ func GetPagination(coin string) int {
 			if err != nil {
 				panic(err)
 			}
-
 			if _, err = open.Seek(-101, io.SeekEnd); err != nil {
+				log.Println("Unable to seek!")
 				return math.MaxInt32
 			}
-
 			b := make([]byte, 120)
 			if _, err = open.Read(b); err != nil {
 				panic(err)
@@ -100,9 +98,9 @@ func GetPagination(coin string) int {
 			stopIndex := strings.Index(row[startIndex:], ",") + startIndex
 			tradeIdTemp, err := strconv.Atoi(row[startIndex:stopIndex])
 			if err != nil {
-				return math.MaxInt32
+				continue
 			}
-			if tradeIdTemp > tradeId {
+			if tradeIdTemp < tradeId {
 				tradeId = tradeIdTemp
 			}
 		}
