@@ -1,19 +1,18 @@
 package main
 
 import (
+	"GoCoinbaseFetcher/datastructure"
 	"GoCoinbaseFetcher/utils"
 	"encoding/json"
 	"flag"
-	"path"
-)
-import (
-	"GoCoinbaseFetcher/datastructure"
 	"fmt"
-	fileutils "github.com/alessiosavi/GoGPUtils/files"
 	"log"
 	"os"
+	"path"
 	"sort"
 	"strings"
+
+	fileutils "github.com/alessiosavi/GoGPUtils/files"
 )
 
 const API = `https://api.pro.coinbase.com/products/%s/trades`
@@ -82,7 +81,6 @@ func MergeData(target, finalName string) {
 	if err = json.NewEncoder(f).Encode(data); err != nil {
 		return
 	}
-
 
 	for _, file := range files {
 		if !strings.HasSuffix(file, ".json") || strings.Contains(file, finalName) {
