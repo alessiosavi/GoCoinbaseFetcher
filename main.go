@@ -31,48 +31,6 @@ const BTC_FILE_USD = `data/btc-usd_%s.json`
 const ETH_FILE_USD = `data/eth-usd_%s.json`
 const LTC_FILE_USD = `data/ltc-usd_%s.json`
 
-//func main() {
-//
-//	var historyBTCTrades strings.Builder
-//	var historyETHTrades strings.Builder
-//	var historyLTCTrades strings.Builder
-//
-//	var historyBTCTradesUSD strings.Builder
-//	var historyETHTradesUSD strings.Builder
-//	var historyLTCTradesUSD strings.Builder
-//
-//	historyBTCTrades.WriteString("[")
-//	historyETHTrades.WriteString("[")
-//	historyLTCTrades.WriteString("[")
-//	historyBTCTradesUSD.WriteString("[")
-//	historyETHTradesUSD.WriteString("[")
-//	historyLTCTradesUSD.WriteString("[")
-//
-//	defer dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyLTCTradesUSD, "PANIC")
-//	c := make(chan os.Signal, 1)
-//	signal.Notify(c, os.Interrupt)
-//	go func() {
-//		<-c
-//		os.Exit(dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyLTCTradesUSD, "CTRL+C"))
-//	}()
-//
-//	var i int
-//	for {
-//		historyBTCTrades.WriteString(getHistoryString("BTC-EUR"))
-//		historyETHTrades.WriteString(getHistoryString("ETH-EUR"))
-//		historyLTCTrades.WriteString(getHistoryString("LTC-EUR"))
-//		time.Sleep(2500 * time.Millisecond)
-//
-//		historyBTCTradesUSD.WriteString(getHistoryString("BTC-USD"))
-//		historyETHTradesUSD.WriteString(getHistoryString("ETH-USD"))
-//		historyLTCTradesUSD.WriteString(getHistoryString("LTC-USD"))
-//		time.Sleep(2500 * time.Millisecond)
-//
-//		log.Println(i)
-//		i++
-//	}
-//}
-
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Llongfile)
 	b := flag.Bool("merge", false, "merge data")
@@ -87,22 +45,30 @@ func main() {
 func MergeData(target, finalName string) {
 	files := fileutils.FindFiles("data", target, true)
 	var data []datastructure.Trade
-	for _, f := range files {
-		if !strings.HasSuffix(f, ".json") {
+	for _, file := range files {
+		if !strings.HasSuffix(file, ".json") {
 			continue
 		}
-		log.Println("Managing file: " + f)
-		var tempData []datastructure.Trade
+		log.Println("Managing file: " + file)
 
-		file, err := ioutil.ReadFile(f)
+		open, err := os.Open(file)
 		if err != nil {
 			panic(err)
 		}
+		defer open.Close()
+		decoder := json.NewDecoder(open)
 
-		if err = json.Unmarshal(file, &tempData); err != nil {
+		if _, err = decoder.Token(); err != nil {
 			panic(err)
 		}
-		data = append(data, tempData...)
+		for decoder.More() {
+			var tempData datastructure.Trade
+			if err = decoder.Decode(&tempData); err != nil {
+				panic(err)
+			}
+			data = append(data, tempData)
+		}
+		open.Close()
 	}
 
 	sort.Slice(data, func(i, j int) bool {
