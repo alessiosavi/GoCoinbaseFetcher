@@ -94,14 +94,13 @@ func GetPagination(coin string) int {
 			}
 			if _, err = open.Seek(-101, io.SeekEnd); err != nil {
 				log.Println("Unable to seek!")
-				return math.MaxInt32
+				continue
 			}
 			b := make([]byte, 120)
 			if _, err = open.Read(b); err != nil {
 				panic(err)
 			}
 			row := string(b)
-			log.Println(row)
 			startIndex := strings.Index(row, `"trade_id":`) + len(`"trade_id":`)
 			stopIndex := strings.Index(row[startIndex:], ",") + startIndex
 			tradeIdTemp, err := strconv.Atoi(row[startIndex:stopIndex])
@@ -147,7 +146,7 @@ func fetch(conf *TradePagination) []byte {
 		panic(err)
 	}
 
-	if bytes.Contains(rawData, []byte("error")) {
+	if !bytes.Contains(rawData, []byte("error")) {
 		rawData = rawData[1 : len(rawData)-1]
 		conf.After = resp.Header.Get("CB-AFTER")
 		return append(rawData, []byte{','}...)
