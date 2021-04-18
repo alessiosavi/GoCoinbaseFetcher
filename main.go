@@ -10,7 +10,6 @@ import (
 	"GoCoinbaseFetcher/datastructure"
 	"fmt"
 	fileutils "github.com/alessiosavi/GoGPUtils/files"
-	"io/ioutil"
 	"log"
 	"os"
 	"sort"
@@ -71,21 +70,25 @@ func MergeData(target, finalName string) {
 		return data[i].TradeID < data[j].TradeID
 	})
 
-	buf, err := json.Marshal(data)
+	fName := path.Join("data/", finalName)
+
+	// If the file doesn't exist, create it, or append to the file
+	f, err := os.OpenFile(fName, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
 	}
+	defer f.Close()
 
-	fName := path.Join("data/", finalName)
-	if err = ioutil.WriteFile(fName, buf, 0755); err != nil {
-		panic(err)
+	if err = json.NewEncoder(f).Encode(data); err != nil {
+		return
 	}
 
-	for _, f := range files {
-		if !strings.HasSuffix(f, ".json") || strings.Contains(f, finalName) {
+
+	for _, file := range files {
+		if !strings.HasSuffix(file, ".json") || strings.Contains(file, finalName) {
 			continue
 		}
-		if err := os.Remove(f); err != nil {
+		if err := os.Remove(file); err != nil {
 			panic(err)
 		}
 	}
