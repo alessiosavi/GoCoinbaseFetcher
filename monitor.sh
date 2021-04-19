@@ -1,5 +1,5 @@
 #!/bin/bash
-p=$(ps -ef | grep "./main" | head -n1 | awk '{print $2}')
+p=$(ps -ef | grep "./main" | grep -v grep | head -n1 | awk '{print $2}')
 
 while true;
 do 

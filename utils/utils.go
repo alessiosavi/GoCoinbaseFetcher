@@ -133,7 +133,7 @@ func GetPagination(coin string, before bool) int {
 			} else {
 				stopIndex = strings.Index(row[startIndex:], "}") + startIndex
 				stopIndex2 := strings.Index(row[startIndex:], ",") + startIndex
-				if stopIndex2 < stopIndex {
+				if stopIndex2 < stopIndex && stopIndex2>startIndex{
 					stopIndex = stopIndex2
 				}
 			}
