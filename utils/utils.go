@@ -196,9 +196,9 @@ func fetch(conf *TradePagination, before bool) []byte {
 	if !bytes.Contains(rawData, []byte("message")) && len(rawData) > 0 {
 		rawData = rawData[1 : len(rawData)-1]
 		if before {
-			conf.ID = resp.Header.Get("CB-AFTER")
-		} else {
 			conf.ID = resp.Header.Get("CB-BEFORE")
+		} else {
+			conf.ID = resp.Header.Get("CB-AFTER")
 		}
 		return append(rawData, []byte{','}...)
 	}
