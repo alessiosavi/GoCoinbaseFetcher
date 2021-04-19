@@ -20,9 +20,8 @@ import (
 )
 
 type TradePagination struct {
-	Name   string `json:"name"`
-	Before string `json:"before"`
-	After  string `json:"after"`
+	Name string `json:"name"`
+	ID   string `json:"before"`
 }
 
 var client = http.Client{
@@ -32,10 +31,10 @@ var client = http.Client{
 	Timeout:       0,
 }
 
-func FetchAllData(API, BTC_FILE_EUR, tradeID string) {
+func FetchAllData(API, BTC_FILE_EUR, tradeID string, before bool) {
 	var pagination TradePagination
 	pagination.Name = fmt.Sprintf(API, "btc-eur")
-	pagination.After = tradeID
+	pagination.ID = tradeID
 
 	log.Println("Using the following pagination: " + tradeID)
 
@@ -60,24 +59,34 @@ func FetchAllData(API, BTC_FILE_EUR, tradeID string) {
 	}()
 
 	for {
-		if _, err = w.Write(fetch(&pagination)); err != nil {
+		if _, err = w.Write(fetch(&pagination, before)); err != nil {
 			panic(err)
 		}
 		if err = w.Flush(); err != nil {
 			panic(err)
 		}
 
-		log.Println("After: ", pagination.After)
-		time.Sleep(500 * time.Millisecond)
+		log.Println("TRADE ID: ", pagination.ID)
+		if !before {
+			time.Sleep(5000 * time.Millisecond)
+		} else {
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
 }
 
-func GetPagination(coin string) int {
-	t, err := fileutils.ListFile("data")
-	if err != nil {
-		return math.MaxInt32
+func GetPagination(coin string, before bool) int {
+	var tradeId int
+	if before {
+		tradeId = math.MaxInt32
+	} else {
+		tradeId = 0
 	}
 
+	t, err := fileutils.ListFile("data")
+	if err != nil {
+		return tradeId
+	}
 	var files []string
 	for _, f := range t {
 		if strings.HasSuffix(f, ".json") {
@@ -85,33 +94,66 @@ func GetPagination(coin string) int {
 		}
 	}
 	sort.Strings(files)
-	var tradeId int = math.MaxInt32
 	for _, f := range files {
 		if strings.Contains(f, coin) && strings.HasSuffix(f, ".json") {
 			open, err := os.Open(f)
 			if err != nil {
-				panic(err)
-			}
-			if _, err = open.Seek(-101, io.SeekEnd); err != nil {
-				log.Println("Unable to seek!")
+				log.Println(err)
 				continue
 			}
-			b := make([]byte, 120)
-			if _, err = open.Read(b); err != nil {
-				panic(err)
+			if before { // Read from the last character
+				if _, err = open.Seek(-101, io.SeekEnd); err != nil {
+					log.Println("Unable to seek: ", err)
+					continue
+				}
+			} else { // Read from the first character
+				if _, err = open.Seek(0, io.SeekStart); err != nil {
+					log.Println("Unable to seek: ", err)
+					continue
+				}
+			}
+			b := make([]byte, 200)
+			if _, err = open.Read(b); err != nil { // Read the first 120 byte
+				log.Println("Unable to read the 120 byte: ", err)
+				continue
 			}
 			row := string(b)
-			startIndex := strings.Index(row, `"trade_id":`) + len(`"trade_id":`)
-			stopIndex := strings.Index(row[startIndex:], ",") + startIndex
-			tradeIdTemp, err := strconv.Atoi(row[startIndex:stopIndex])
-			if err != nil {
+			if strings.Contains(row, "message") || strings.Contains(row, "Invalid") {
 				continue
 			}
-			if tradeIdTemp < tradeId {
-				tradeId = tradeIdTemp
+			var startIndex, stopIndex int
+			startIndex = strings.Index(row, `"trade_id":`) + len(`"trade_id":`)
+			if before {
+				// This hack have to be done cause i've changed the order of the struct in order to align byte
+				// and reduce memory usage of struct on rapsberry Pi :'(
+				stopIndex = strings.Index(row[startIndex:], ",") + startIndex
+				if stopIndex < startIndex {
+					stopIndex = strings.Index(row[startIndex:], "}") + startIndex
+				}
+			} else {
+				stopIndex = strings.Index(row[startIndex:], "}") + startIndex
+				stopIndex2 := strings.Index(row[startIndex:], ",") + startIndex
+				if stopIndex2 < stopIndex {
+					stopIndex = stopIndex2
+				}
+			}
+			tradeIdTemp, err := strconv.Atoi(row[startIndex:stopIndex])
+			if err != nil {
+				log.Println("Unable to cast tradeID to int:", err)
+				continue
+			}
+			if before {
+				if tradeIdTemp < tradeId {
+					tradeId = tradeIdTemp
+				}
+			} else {
+				if tradeIdTemp > tradeId {
+					tradeId = tradeIdTemp
+				}
 			}
 		}
 	}
+	log.Println("Using the following tradeID:", tradeId)
 	return tradeId
 }
 
@@ -123,8 +165,13 @@ func dumpAllData(f *os.File) int {
 	return 0
 }
 
-func fetch(conf *TradePagination) []byte {
-	url := conf.Name + fmt.Sprintf("?after=%s", conf.After)
+func fetch(conf *TradePagination, before bool) []byte {
+	var url string
+	if before {
+		url = conf.Name + fmt.Sprintf("?after=%s", conf.ID)
+	} else {
+		url = conf.Name + fmt.Sprintf("?before=%s", conf.ID)
+	}
 	resp, err := client.Get(url)
 	if err != nil {
 		log.Println("ERROR:", err)
@@ -146,9 +193,13 @@ func fetch(conf *TradePagination) []byte {
 		panic(err)
 	}
 
-	if !bytes.Contains(rawData, []byte("error")) {
+	if !bytes.Contains(rawData, []byte("message")) && len(rawData) > 0 {
 		rawData = rawData[1 : len(rawData)-1]
-		conf.After = resp.Header.Get("CB-AFTER")
+		if before {
+			conf.ID = resp.Header.Get("CB-AFTER")
+		} else {
+			conf.ID = resp.Header.Get("CB-BEFORE")
+		}
 		return append(rawData, []byte{','}...)
 	}
 	return nil
