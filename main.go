@@ -4,8 +4,6 @@ import (
 	"GoCoinbaseFetcher/datastructure"
 	"GoCoinbaseFetcher/utils"
 	"encoding/json"
-	"flag"
-	"fmt"
 	fileutils "github.com/alessiosavi/GoGPUtils/files"
 	"log"
 	"os"
@@ -14,45 +12,13 @@ import (
 	"strings"
 )
 
-const API = `https://api.pro.coinbase.com/products/%s/trades`
+
 
 const BTC_FILE_EUR = `data/btc-eur_%s.json`
-const ETH_FILE_EUR = `data/eth-eur_%s.json`
-const LTC_FILE_EUR = `data/ltc-eur_%s.json`
-
-const BTC_FILE_USD = `data/btc-usd_%s.json`
-const ETH_FILE_USD = `data/eth-usd_%s.json`
-const LTC_FILE_USD = `data/ltc-usd_%s.json`
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Llongfile)
-
-	if !fileutils.IsDir("log") {
-		os.Mkdir("log", 0755)
-	}
-	//
-	//f, err := os.OpenFile(fmt.Sprintf("log/log_%s.log", time.Now().Format("2006.01.02_15.04.05")), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	//defer f.Close()
-	//log.SetOutput(f)
-
-	b := flag.Bool("merge", false, "merge data")
-	mode := flag.Bool("before", false, "use `true` or `false` in order to download the past or future transaction")
-	flag.Parse()
-	if *b {
-		log.Println("Merging data")
-		MergeData("btc-eur", "btc-eur.json")
-		return
-	}
-
-	if *mode {
-		log.Println("Downloading old data ...")
-	} else {
-		log.Println("Downloading new data ...")
-	}
-	utils.FetchAllData(API, BTC_FILE_EUR, fmt.Sprintf("%d", utils.GetPagination("btc-eur", *mode)), *mode)
+	utils.FetchAllData(BTC_FILE_EUR)
 }
 
 func MergeData(target, finalName string) {
