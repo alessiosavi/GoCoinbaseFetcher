@@ -1,24 +1,17 @@
 package main
 
 import (
-	"github.com/pquerna/ffjson/ffjson"
-	"path"
-)
-import (
 	"GoCoinbaseFetcher/datastructure"
-	//"encoding/json"
+	"GoCoinbaseFetcher/utils"
+	"encoding/json"
+	"flag"
 	"fmt"
 	fileutils "github.com/alessiosavi/GoGPUtils/files"
-	"io/ioutil"
 	"log"
-	"net/http"
-	"net/http/httputil"
 	"os"
-	"os/signal"
-	"runtime/debug"
+	"path"
 	"sort"
 	"strings"
-	"time"
 )
 
 const API = `https://api.pro.coinbase.com/products/%s/trades`
@@ -32,148 +25,89 @@ const ETH_FILE_USD = `data/eth-usd_%s.json`
 const LTC_FILE_USD = `data/ltc-usd_%s.json`
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Llongfile)
 
-	var historyBTCTrades strings.Builder
-	var historyETHTrades strings.Builder
-	var historyLTCTrades strings.Builder
-
-	var historyBTCTradesUSD strings.Builder
-	var historyETHTradesUSD strings.Builder
-	var historyLTCTradesUSD strings.Builder
-
-	historyBTCTrades.WriteString("[")
-	historyETHTrades.WriteString("[")
-	historyLTCTrades.WriteString("[")
-	historyBTCTradesUSD.WriteString("[")
-	historyETHTradesUSD.WriteString("[")
-	historyLTCTradesUSD.WriteString("[")
-
-	defer dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyLTCTradesUSD, "PANIC")
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		os.Exit(dumpAllData(historyBTCTrades, historyETHTrades, historyLTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyLTCTradesUSD, "CTRL+C"))
-	}()
-
-	var i int
-	for {
-		historyBTCTrades.WriteString(getHistoryString("BTC-EUR"))
-		historyETHTrades.WriteString(getHistoryString("ETH-EUR"))
-		historyLTCTrades.WriteString(getHistoryString("LTC-EUR"))
-		time.Sleep(2500 * time.Millisecond)
-
-		historyBTCTradesUSD.WriteString(getHistoryString("BTC-USD"))
-		historyETHTradesUSD.WriteString(getHistoryString("ETH-USD"))
-		historyLTCTradesUSD.WriteString(getHistoryString("LTC-USD"))
-		time.Sleep(2500 * time.Millisecond)
-
-		log.Println(i)
-		i++
+	if !fileutils.IsDir("log") {
+		os.Mkdir("log", 0755)
 	}
+	//
+	//f, err := os.OpenFile(fmt.Sprintf("log/log_%s.log", time.Now().Format("2006.01.02_15.04.05")), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//defer f.Close()
+	//log.SetOutput(f)
+
+	b := flag.Bool("merge", false, "merge data")
+	mode := flag.Bool("before", false, "use `true` or `false` in order to download the past or future transaction")
+	flag.Parse()
+	if *b {
+		log.Println("Merging data")
+		MergeData("btc-eur", "btc-eur.json")
+		return
+	}
+
+	if *mode {
+		log.Println("Downloading old data ...")
+	} else {
+		log.Println("Downloading new data ...")
+	}
+	utils.FetchAllData(API, BTC_FILE_EUR, fmt.Sprintf("%d", utils.GetPagination("btc-eur", *mode)), *mode)
 }
 
 func MergeData(target, finalName string) {
 	files := fileutils.FindFiles("data", target, true)
 	var data []datastructure.Trade
-	for _, f := range files {
-		if !strings.HasSuffix(f, ".json") {
+	for _, file := range files {
+		if !strings.HasSuffix(file, ".json") {
 			continue
 		}
-		log.Println("Managing file: " + f)
-		var tempData []datastructure.Trade
+		log.Println("Managing file: " + file)
 
-		file, err := ioutil.ReadFile(f)
+		open, err := os.Open(file)
 		if err != nil {
 			panic(err)
 		}
+		defer open.Close()
+		decoder := json.NewDecoder(open)
 
-		if err = ffjson.Unmarshal(file, &tempData); err != nil {
+		if _, err = decoder.Token(); err != nil {
 			panic(err)
 		}
-		data = append(data, tempData...)
+		for decoder.More() {
+			var tempData datastructure.Trade
+			if err = decoder.Decode(&tempData); err != nil {
+				panic(err)
+			}
+			data = append(data, tempData)
+		}
+		open.Close()
 	}
-
+	log.Println("File read, going to sort ...")
 	sort.Slice(data, func(i, j int) bool {
 		return data[i].TradeID < data[j].TradeID
 	})
 
-	buf, err := ffjson.Marshal(data)
+	fName := path.Join("data/", finalName)
+	log.Println("File Sorted! Going to dump into: " + fName)
+
+	// If the file doesn't exist, create it
+	f, err := os.OpenFile(fName, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
 	}
+	defer f.Close()
 
-	fName := path.Join("data/", finalName)
-	if err = ioutil.WriteFile(fName, buf, 0755); err != nil {
-		panic(err)
+	if err = json.NewEncoder(f).Encode(data); err != nil {
+		return
 	}
 
-	for _, f := range files {
-		if !strings.HasSuffix(f, ".json") || strings.Contains(f, finalName) {
+	for _, file := range files {
+		if !strings.HasSuffix(file, ".json") || strings.Contains(file, finalName) {
 			continue
 		}
-		if err := os.Remove(f); err != nil {
+		if err := os.Remove(file); err != nil {
 			panic(err)
 		}
 	}
-	ffjson.Pool(buf)
-}
-
-func dumpAllData(historyBTCTrades, historyBTCTradesUSD, historyETHTradesUSD, historyETHTrades, historyLTCTrades, historyLTCTradesUSD strings.Builder, message string) int {
-	log.Println(message + " INTERCEPTED!")
-	timeNow := time.Now().Format("2006.01.02_15.04.05")
-
-	// Dumping BTC
-	dumpData(historyBTCTrades.String(), fmt.Sprintf(BTC_FILE_EUR, timeNow))
-	historyBTCTrades.Reset()
-	debug.FreeOSMemory()
-
-	dumpData(historyBTCTradesUSD.String(), fmt.Sprintf(BTC_FILE_USD, timeNow))
-	historyBTCTradesUSD.Reset()
-	debug.FreeOSMemory()
-
-	// DUMPING ETH
-	dumpData(historyETHTrades.String(), fmt.Sprintf(ETH_FILE_EUR, timeNow))
-	historyETHTrades.Reset()
-	debug.FreeOSMemory()
-
-	dumpData(historyETHTradesUSD.String(), fmt.Sprintf(ETH_FILE_USD, timeNow))
-	historyETHTradesUSD.Reset()
-	debug.FreeOSMemory()
-
-	// DUMPING LTC
-	dumpData(historyLTCTrades.String(), fmt.Sprintf(LTC_FILE_EUR, timeNow))
-	historyLTCTrades.Reset()
-	debug.FreeOSMemory()
-
-	dumpData(historyLTCTradesUSD.String(), fmt.Sprintf(LTC_FILE_USD, timeNow))
-	historyLTCTradesUSD.Reset()
-	debug.FreeOSMemory()
-
-	return 0
-}
-
-func dumpData(historyTrades, filename string) {
-	_ = ioutil.WriteFile(filename, []byte(historyTrades[:len(historyTrades)-1]+"]"), 0755)
-}
-
-func getHistoryString(pair string) string {
-	resp, err := http.Get(fmt.Sprintf(API, pair))
-	if err != nil {
-		panic(err)
-	}
-	if resp.StatusCode == 429 {
-		response, err := httputil.DumpResponse(resp, true)
-		if err != nil {
-			panic(err)
-		}
-		log.Println("TOO MUCH REQUEST:\n" + string(response))
-		time.Sleep(5 * time.Second)
-	}
-	rawData, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		panic(err)
-	}
-	rawData = rawData[1 : len(rawData)-1]
-	return string(rawData) + ","
 }
