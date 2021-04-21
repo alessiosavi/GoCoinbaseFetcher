@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"GoCoinbaseFetcher/datastructure"
 	"bufio"
 	"bytes"
 	"fmt"
@@ -9,7 +10,6 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
-	"net/http"
 	"net/http/httputil"
 	"os"
 	"os/signal"
@@ -22,13 +22,6 @@ import (
 type TradePagination struct {
 	Name string `json:"name"`
 	ID   string `json:"before"`
-}
-
-var client = http.Client{
-	Transport:     http.DefaultTransport,
-	CheckRedirect: nil,
-	Jar:           nil,
-	Timeout:       0,
 }
 
 func FetchAllData(API, BTC_FILE_EUR, tradeID string, before bool) {
@@ -47,13 +40,13 @@ func FetchAllData(API, BTC_FILE_EUR, tradeID string, before bool) {
 	w := bufio.NewWriter(f)
 	w.WriteString("[")
 
-	defer dumpAllData(f)
+	defer DumpAllData(f)
 	defer f.Close()
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		dumpAllData(f)
+		DumpAllData(f)
 		f.Close()
 		os.Exit(0)
 	}()
@@ -157,7 +150,7 @@ func GetPagination(coin string, before bool) int {
 	return tradeId
 }
 
-func dumpAllData(f *os.File) int {
+func DumpAllData(f *os.File) int {
 	if _, err := f.Seek(-1, io.SeekEnd); err != nil {
 		panic(err)
 	}
@@ -172,7 +165,7 @@ func fetch(conf *TradePagination, before bool) []byte {
 	} else {
 		url = conf.Name + fmt.Sprintf("?before=%s", conf.ID)
 	}
-	resp, err := client.Get(url)
+	resp, err := datastructure.Client.Get(url)
 	if err != nil {
 		log.Println("ERROR:", err)
 		return nil
