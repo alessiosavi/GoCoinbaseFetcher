@@ -15,12 +15,14 @@ import (
 
 const CANDLE_FILE = "data/candle/%s/candle_%s_%s.json"
 
+var LAYOUT = "2006-01-02T15:04:05Z"
+
 func GetHistoryCandles(pair, startDate string, granularity int) []byte {
 	client := coinbasepro.NewClient()
-
 	client.UpdateConfig(&coinbasepro.ClientConfig{
 		BaseURL: "https://api.pro.coinbase.com",
 	})
+	client.RetryCount = 5
 	date, err := time.Parse("2006-01-02", startDate)
 	if err != nil {
 		log.Println(err)
@@ -59,7 +61,7 @@ func GetHistoryCandles(pair, startDate string, granularity int) []byte {
 	t := time.Date(2015, 01, 01, 0, 0, 0, 0, time.UTC)
 	for date.After(t) {
 		dateYesterday := date.Add(-5 * time.Hour)
-		log.Printf("From: %+v To: %+v\n", date, dateYesterday)
+		log.Printf("From: %s To: %s \n", date.UTC().Format(LAYOUT), dateYesterday.UTC().Format(LAYOUT))
 		rates, err := client.GetHistoricRates(pair, coinbasepro.GetHistoricRatesParams{
 			Start:       dateYesterday,
 			End:         date,
@@ -67,7 +69,8 @@ func GetHistoryCandles(pair, startDate string, granularity int) []byte {
 		})
 		if err != nil {
 			log.Println(err)
-			return nil
+			log.Printf("ERROR! From: %+v To: %+v | ERR:\n%s\n", date.UTC().Format(LAYOUT), dateYesterday.UTC().Format(LAYOUT), err.Error())
+			continue
 		}
 		date = dateYesterday
 
@@ -85,7 +88,7 @@ func GetHistoryCandles(pair, startDate string, granularity int) []byte {
 			log.Println(err)
 			continue
 		}
-		time.Sleep(350 * time.Millisecond)
+		time.Sleep(400 * time.Millisecond)
 	}
 	return nil
 
