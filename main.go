@@ -17,5 +17,6 @@ const LTC_FILE_USD = `data/ltc-usd_%s.json`
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Llongfile)
-	api.GetCandles("BTC-EUR", "2021-04-22", 60)
+	//api.GetCandles("BTC-EUR", "2021-04-22", 60)
+	api.GetHistoryCandles("BTC-EUR", "2021-04-22", 60)
 }

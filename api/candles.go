@@ -1,11 +1,11 @@
 package api
 
 import (
-	"GoCoinbaseFetcher/datastructure"
 	"GoCoinbaseFetcher/utils"
 	"bufio"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	coinbasepro "github.com/preichenberger/go-coinbasepro/v2"
 	"log"
 	"os"
 	"os/signal"
@@ -13,16 +13,22 @@ import (
 	"time"
 )
 
-const CANDLE_API = "https://api-public.sandbox.pro.coinbase.com/products/%s/candles?start=%s&graularity=%d"
 const CANDLE_FILE = "data/candle/%s/candle_%s_%s.json"
 
-func GetCandles(pair, startDate string, granularity int) error {
+func GetHistoryCandles(pair, startDate string, granularity int) []byte {
+	client := coinbasepro.NewClient()
+
+	client.UpdateConfig(&coinbasepro.ClientConfig{
+		BaseURL: "https://api.pro.coinbase.com",
+	})
 	date, err := time.Parse("2006-01-02", startDate)
 	if err != nil {
-		return err
+		log.Println(err)
+		return nil
 	}
 	if err = os.MkdirAll(path.Base(CANDLE_FILE), 0755); err != nil {
-		return err
+		log.Println(err)
+		return nil
 	}
 
 	timeNow := time.Now().Format("2006.01.02_15.04.05")
@@ -31,29 +37,44 @@ func GetCandles(pair, startDate string, granularity int) error {
 
 	f, err := os.Create(fName)
 	if err != nil {
-		return err
+		log.Println(err)
+		return nil
 	}
+
 	defer utils.DumpAllData(f)
 	defer f.Close()
+
 	w := bufio.NewWriter(f)
+	w.WriteString("[")
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		utils.DumpAllData(f)
+		f.Close()
+		os.Exit(0)
+	}()
 
 	t := time.Date(2015, 01, 01, 0, 0, 0, 0, time.UTC)
 	for date.After(t) {
-
-		log.Printf("Date: %s\n", date)
-		url := fmt.Sprintf(CANDLE_API, pair, date.Format("2006-01-02"), granularity)
-		get, err := datastructure.Client.Get(url)
+		dateYesterday := date.Add(-5 * time.Hour)
+		log.Printf("From: %+v To: %+v\n", date, dateYesterday)
+		rates, err := client.GetHistoricRates(pair, coinbasepro.GetHistoricRatesParams{
+			Start:       dateYesterday,
+			End:         date,
+			Granularity: granularity,
+		})
 		if err != nil {
 			log.Println(err)
-			continue
+			return nil
 		}
-		defer get.Body.Close()
-		data, err := ioutil.ReadAll(get.Body)
+		date = dateYesterday
+
+		data, err := json.Marshal(rates)
 		if err != nil {
 			log.Println(err)
-			continue
+			return nil
 		}
 
 		if _, err = w.Write(append(data, []byte(",")...)); err != nil {
@@ -64,9 +85,7 @@ func GetCandles(pair, startDate string, granularity int) error {
 			log.Println(err)
 			continue
 		}
-
-		date = date.Add(-24 * time.Hour)
-		time.Sleep(1 * time.Second)
+		time.Sleep(350 * time.Millisecond)
 	}
 	return nil
 
