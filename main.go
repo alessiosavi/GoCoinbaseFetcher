@@ -1,22 +1,24 @@
 package main
 
 import (
-	"GoCoinbaseFetcher/api"
+	"github.com/alessiosavi/coinbase-fetcher/datastructure"
 	"log"
+	"time"
 )
 
-const API = `https://api.pro.coinbase.com/products/%s/trades`
-
-const BTC_FILE_EUR = `data/btc-eur_%s.json`
-const ETH_FILE_EUR = `data/eth-eur_%s.json`
-const LTC_FILE_EUR = `data/ltc-eur_%s.json`
-
-const BTC_FILE_USD = `data/btc-usd_%s.json`
-const ETH_FILE_USD = `data/eth-usd_%s.json`
-const LTC_FILE_USD = `data/ltc-usd_%s.json`
+//curl --request GET --url 'https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=60&start=start&end=end' --header 'Accept: application/json'
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Llongfile)
-	//api.GetCandles("BTC-EUR", "2021-04-22", 60)
-	api.GetHistoryCandles("BTC-EUR", "2021-04-22", 60)
+	log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
+	var opts = datastructure.DownloadOpts{
+		Granularity: datastructure.GRANULARITY_15_MINUTES,
+		Pair:        "BTC-USD",
+		LimitDate:   time.Date(2015, 01, 01, 0, 0, 0, 0, time.UTC),
+	}
+	download := opts.New()
+	filename := download.Download(nil)
+
+	var manager datastructure.Manager
+	manager.Sort(filename)
+	manager.DropDuplicates(filename)
 }
